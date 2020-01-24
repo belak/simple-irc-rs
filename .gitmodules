@@ -1,0 +1,3 @@
+[submodule "tests/external/parser-tests"]
+	path = tests/external/parser-tests
+	url = https://github.com/ircdocs/parser-tests

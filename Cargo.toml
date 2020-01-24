@@ -1,0 +1,13 @@
+[package]
+name = "simple-irc"
+version = "0.1.0"
+authors = ["Kaleb Elwert <belak@coded.io>"]
+edition = "2018"
+
+[dev-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
+
+[dependencies]
+nom = "5.1.0"
+thiserror = "1.0"
