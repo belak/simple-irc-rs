@@ -1,5 +1,5 @@
 mod error;
 mod message;
 
-pub use message::parse_message;
+pub use error::ParseError;
 pub use message::Message;

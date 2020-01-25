@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-use simple_irc::parse_message;
+use simple_irc::Message;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct MsgSplitTestAtoms {
@@ -32,7 +33,7 @@ fn test_msg_split() {
     for test in tests.tests {
         println!("Trying {}", &test.input);
 
-        let res = parse_message(&test.input);
+        let res = Message::try_from(&test.input[..]);
 
         // Ensure all messages parse into something
         assert!(
@@ -45,7 +46,7 @@ fn test_msg_split() {
         let msg = res.unwrap();
 
         let mut test_tags = test.atoms.tags.clone();
-        let mut msg_tags = msg.1.tags.clone();
+        let mut msg_tags = msg.tags.clone();
 
         println!("{:?} {:?}", test_tags, msg_tags);
 
@@ -68,29 +69,29 @@ fn test_msg_split() {
         };
 
         assert_eq!(
-            prefix, msg.1.prefix,
+            prefix, msg.prefix,
             "msg prefix mismatch: expected \"{:?}\" got \"{:?}\"",
-            prefix, msg.1.prefix,
+            prefix, msg.prefix,
         );
 
         assert_eq!(
-            &test.atoms.verb, msg.1.command,
+            &test.atoms.verb, msg.command,
             "msg command mismatch: expected \"{}\" got \"{}\"",
-            &test.atoms.verb, msg.1.command,
+            &test.atoms.verb, msg.command,
         );
 
         if let Some(params) = &test.atoms.params {
             let params: Vec<&str> = params.iter().map(|s| &s[..]).collect();
             assert_eq!(
-                params, msg.1.params,
+                params, msg.params,
                 "msg params mismatch: expected \"{:?}\" got \"{:?}\"",
-                params, msg.1.params,
+                params, msg.params,
             );
         } else {
             assert!(
-                msg.1.params.len() == 0,
+                msg.params.len() == 0,
                 "msg params mismatch: expected no params got \"{:?}\"",
-                msg.1.params
+                msg.params
             );
         }
     }
