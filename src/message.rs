@@ -84,9 +84,9 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             } else {
                 return Err(ParseError::TagError("failed to parse tag data".to_string()));
             }
-        }
 
-        input = input.trim_start_matches(" ");
+            input = input.trim_start_matches(" ");
+        }
 
         if input.get(..1) == Some(":") {
             // Find the first space so we can split on it.
