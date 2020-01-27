@@ -6,23 +6,36 @@ use serde::{Deserialize, Serialize};
 use simple_irc::Message;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct MsgSplitTestAtoms {
+struct TestAtoms {
     #[serde(default)]
     tags: BTreeMap<String, String>,
     source: Option<String>,
     verb: String,
-    params: Option<Vec<String>>,
+    #[serde(default)]
+    params: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct MsgSplitTest {
     input: String,
-    atoms: MsgSplitTestAtoms,
+    atoms: TestAtoms,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct MsgSplitTests {
     tests: Vec<MsgSplitTest>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct MsgJoinTest {
+    desc: String,
+    matches: Vec<String>,
+    atoms: TestAtoms,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct MsgJoinTests {
+    tests: Vec<MsgJoinTest>,
 }
 
 #[test]
@@ -52,7 +65,12 @@ fn test_msg_split() {
 
         // Loop through all the test tags and make sure they were there.
         for (key, value) in test_tags.clone() {
-            assert_eq!(&value, msg_tags.get(key.as_str()).unwrap(), "Mismatched value for key {}", key.as_str());
+            assert_eq!(
+                &value,
+                msg_tags.get(key.as_str()).unwrap(),
+                "Mismatched value for key {}",
+                key.as_str()
+            );
             test_tags.remove(&key);
             msg_tags.remove(&key[..]);
         }
@@ -80,19 +98,41 @@ fn test_msg_split() {
             &test.atoms.verb, msg.command,
         );
 
-        if let Some(params) = &test.atoms.params {
-            let params: Vec<&str> = params.iter().map(|s| &s[..]).collect();
-            assert_eq!(
-                params, msg.params,
-                "msg params mismatch: expected \"{:?}\" got \"{:?}\"",
-                params, msg.params,
-            );
-        } else {
-            assert!(
-                msg.params.len() == 0,
-                "msg params mismatch: expected no params got \"{:?}\"",
-                msg.params
-            );
+        let params: Vec<&str> = test.atoms.params.iter().map(|s| &s[..]).collect();
+        assert_eq!(
+            params, msg.params,
+            "msg params mismatch: expected \"{:?}\" got \"{:?}\"",
+            params, msg.params,
+        );
+    }
+}
+
+#[test]
+fn test_msg_join() {
+    let msg_split_test_data = include_str!("external/parser-tests/tests/msg-join.yaml");
+    let tests = serde_yaml::from_str::<MsgJoinTests>(msg_split_test_data).unwrap();
+
+    for test in tests.tests {
+        let mut tags: BTreeMap<&str, String> = BTreeMap::new();
+
+        for (k, v) in test.atoms.tags.iter() {
+            tags.insert(k.as_str(), v.to_string());
         }
+
+        let msg = Message {
+            tags,
+            prefix: test.atoms.source.as_deref(),
+            command: &test.atoms.verb[..],
+            params: test.atoms.params.iter().map(|s| &s[..]).collect(),
+        };
+
+        let out = format!("{}", msg);
+
+        assert!(
+            test.matches.contains(&out.to_string()),
+            "expected one of: {:?}, got: {:?}",
+            test.matches,
+            out
+        );
     }
 }

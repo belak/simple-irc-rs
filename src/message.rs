@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::fmt;
+use std::fmt::Write;
 use std::option::Option;
 
 use super::error::ParseError;
@@ -12,9 +14,7 @@ pub struct Message<'a> {
     pub params: Vec<&'a str>,
 }
 
-fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, String>, ParseError> {
-    let mut ret = BTreeMap::new();
-
+fn parse_tags<'a>(tags: &mut BTreeMap<&'a str, String>, input: &'a str) -> Result<(), ParseError> {
     for tag_data in input.split(";") {
         let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find("=") {
             (&tag_data[..loc], tag_data.get(loc + 1..).unwrap_or(""))
@@ -49,10 +49,10 @@ fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, String>, ParseErro
             }
         }
 
-        ret.insert(tag_name, tag_value);
+        tags.insert(tag_name, tag_value);
     }
 
-    Ok(ret)
+    Ok(())
 }
 
 impl<'a> TryFrom<&'a str> for Message<'a> {
@@ -63,6 +63,8 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         // message.
         let mut input = input;
 
+        // Possibly chop off the ending \r\n where either of those characters is
+        // optional.
         if input.ends_with("\n") {
             input = &input[..input.len() - 1];
         }
@@ -70,14 +72,14 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             input = &input[..input.len() - 1];
         }
 
-        let mut tags: Option<BTreeMap<&'a str, String>> = None;
+        let mut tags: BTreeMap<&'a str, String> = BTreeMap::new();
         let mut prefix: Option<&'a str> = None;
 
         if input.get(..1) == Some("@") {
             // Find the first space so we can split on it.
             if let Some(loc) = input.find(" ") {
                 let tag_data = &input[1..loc];
-                tags = Some(parse_tags(tag_data)?);
+                parse_tags(&mut tags, tag_data)?;
 
                 // Update input to point to everything after the space
                 input = &input[loc..];
@@ -151,10 +153,58 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         let (command, params) = params.split_first().unwrap();
 
         Ok(Message {
-            tags: tags.unwrap_or(BTreeMap::new()),
-            prefix: prefix,
+            tags,
+            prefix,
             command: *command,
             params: params.to_vec(),
         })
+    }
+}
+
+impl<'a> fmt::Display for Message<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.tags.len() > 0 {
+            f.write_str("@")?;
+            for (i, (k, v)) in self.tags.iter().enumerate() {
+                if i != 0 {
+                    f.write_char(';')?;
+                }
+
+                f.write_str(k)?;
+                if v.len() > 0 {
+                    f.write_char('=')?;
+                }
+
+                for c in v.chars() {
+                    // Escape characters that can't be directly encoded.
+                    match c {
+                        ';' => f.write_str(r"\:")?,
+                        ' ' => f.write_str(r"\s")?,
+                        '\\' => f.write_str(r"\\")?,
+                        '\r' => f.write_str(r"\r")?,
+                        '\n' => f.write_str(r"\n")?,
+                        _ => f.write_char(c)?,
+                    }
+                }
+            }
+
+            f.write_str(" ")?;
+        }
+
+        if let Some(prefix) = &self.prefix {
+            write!(f, ":{} ", prefix)?;
+        }
+
+        f.write_str(self.command)?;
+
+        if let Some((last, params)) = self.params.split_last() {
+            for param in params {
+                write!(f, " {}", param)?;
+            }
+
+            write!(f, " :{}", last)?;
+        }
+
+        Ok(())
     }
 }
