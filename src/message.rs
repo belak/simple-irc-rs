@@ -73,92 +73,62 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         let mut tags = BTreeMap::new();
         let mut prefix = None;
 
-        if input.get(..1) == Some("@") {
-            // Find the first space so we can split on it.
-            if let Some(loc) = input.find(' ') {
-                let tag_data = &input[1..loc];
-                tags = parse_tags(tag_data)?;
+        if input.starts_with('@') {
+            let mut parts = (&input[1..]).splitn(2, ' ');
+            let tag_data = parts
+                .next()
+                .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?;
 
-                // Update input to point to everything after the space
-                input = &input[loc..];
-            } else {
-                return Err(Error::TagError("failed to parse tag data".to_string()));
-            }
+            tags = parse_tags(tag_data)?;
 
-            // Trim up to the next valid character.
-            input = input.trim_start_matches(' ');
+            // Either advance to the next token, or return an empty string.
+            input = parts.next().unwrap_or("").trim_start_matches(' ');
         }
 
-        if input.get(..1) == Some(":") {
-            // Find the first space so we can split on it.
-            if let Some(loc) = input.find(' ') {
-                prefix = Some(&input[1..loc]);
+        if input.starts_with(':') {
+            let mut parts = (&input[1..]).splitn(2, ' ');
+            prefix = Some(
+                parts
+                    .next()
+                    .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?,
+            );
 
-                // Update input to point to everything after the space
-                input = &input[loc..];
-            } else {
-                return Err(Error::PrefixError(
-                    "failed to parse prefix data".to_string(),
-                ));
-            }
-
-            // Note that we don't trim spaces here because that's handled by
-            // param parsing.
+            // Either advance to the next token, or return an empty string.
+            input = parts.next().unwrap_or("").trim_start_matches(' ');
         }
+
+        let mut parts = input.splitn(2, ' ');
+        let command = parts
+            .next()
+            .ok_or_else(|| Error::CommandError("missing command".to_string()))?;
+
+        // Either advance to the next token, or return an empty string.
+        input = parts.next().unwrap_or("").trim_start_matches(' ');
 
         // Parse out the params
         let mut params = Vec::new();
-        loop {
-            // Drop any leading spaces
-            input = input.trim_start_matches(' ');
-
-            match input.get(..1) {
-                // If a param started with a :, that means the rest of the input
-                // is a single trailing param.
-                Some(":") => {
-                    params.push(&input[1..]);
-                    break;
-                }
-
-                // Anything else is a normal param.
-                Some(_) => {
-                    match input.find(' ') {
-                        Some(loc) => {
-                            params.push(&input[..loc]);
-                            // Update input to point to everything after the space
-                            input = &input[loc..];
-                        }
-
-                        // If we couldn't find a space, the rest of the string
-                        // is the param.
-                        None => {
-                            params.push(input);
-                            break;
-                        }
-                    }
-                }
-
-                // If we didn't get anything, this means we're at the end of the
-                // string.
-                None => {
-                    break;
-                }
+        while !input.is_empty() {
+            // Special case - if the param starts with a :, it's a trailing
+            // param, so we need to include the rest of the input as the param.
+            if input.starts_with(':') {
+                params.push(&input[1..]);
+                break;
             }
-        }
 
-        if params.is_empty() {
-            return Err(Error::CommandError("missing command".to_string()));
-        }
+            let mut parts = input.splitn(2, ' ');
+            if let Some(param) = parts.next() {
+                params.push(param)
+            }
 
-        // Take the first param as the command. Note that we've already checked
-        // if params is empty, so we can unwrap this safely.
-        let (command, params) = params.split_first().unwrap();
+            // Either advance to the next token, or return an empty string.
+            input = parts.next().unwrap_or("").trim_start_matches(' ');
+        }
 
         Ok(Message {
             tags,
             prefix,
             command,
-            params: params.to_vec(),
+            params,
         })
     }
 }
