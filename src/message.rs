@@ -19,8 +19,8 @@ pub struct Message {
 fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
     let mut tags = BTreeMap::new();
 
-    for tag_data in input.split(";") {
-        let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find("=") {
+    for tag_data in input.split(';') {
+        let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find('=') {
             (&tag_data[..loc], tag_data.get(loc + 1..).unwrap_or(""))
         } else {
             // If there's no equals sign, we need to default to the empty
@@ -39,12 +39,8 @@ fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
         let mut tag_value_chars = raw_tag_value.chars();
         while let Some(c) = tag_value_chars.next() {
             if c == '\\' {
-                match tag_value_chars.next() {
-                    Some(escaped_char) => tag_value.push(unescape_char(escaped_char)),
-
-                    // None at this point means we're at the end of the value,
-                    // so we can drop it.
-                    None => {}
+                if let Some(escaped_char) = tag_value_chars.next() {
+                    tag_value.push(unescape_char(escaped_char));
                 }
             } else {
                 tag_value.push(c);
@@ -67,10 +63,10 @@ impl FromStr for Message {
 
         // Possibly chop off the ending \r\n where either of those characters is
         // optional.
-        if input.ends_with("\n") {
+        if input.ends_with('\n') {
             input = &input[..input.len() - 1];
         }
-        if input.ends_with("\r") {
+        if input.ends_with('\r') {
             input = &input[..input.len() - 1];
         }
 
@@ -79,7 +75,7 @@ impl FromStr for Message {
 
         if input.get(..1) == Some("@") {
             // Find the first space so we can split on it.
-            if let Some(loc) = input.find(" ") {
+            if let Some(loc) = input.find(' ') {
                 let tag_data = &input[1..loc];
                 tags = parse_tags(tag_data)?;
 
@@ -89,12 +85,12 @@ impl FromStr for Message {
                 return Err(ParseError::TagError("failed to parse tag data".to_string()));
             }
 
-            input = input.trim_start_matches(" ");
+            input = input.trim_start_matches(' ');
         }
 
         if input.get(..1) == Some(":") {
             // Find the first space so we can split on it.
-            if let Some(loc) = input.find(" ") {
+            if let Some(loc) = input.find(' ') {
                 prefix = Some(input[1..loc].to_string());
 
                 // Update input to point to everything after the space
@@ -110,7 +106,7 @@ impl FromStr for Message {
         let mut params = Vec::new();
         loop {
             // Drop any leading spaces
-            input = input.trim_start_matches(" ");
+            input = input.trim_start_matches(' ');
 
             match input.get(..1) {
                 // If a param started with a :, that means the rest of the input
@@ -122,7 +118,7 @@ impl FromStr for Message {
 
                 // Anything else is a normal param.
                 Some(_) => {
-                    match input.find(" ") {
+                    match input.find(' ') {
                         Some(loc) => {
                             params.push(input[..loc].to_string());
                             // Update input to point to everything after the space
@@ -146,7 +142,7 @@ impl FromStr for Message {
             }
         }
 
-        if params.len() == 0 {
+        if params.is_empty() {
             return Err(ParseError::CommandError("command not found".to_string()));
         }
 
@@ -165,7 +161,7 @@ impl FromStr for Message {
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.tags.len() > 0 {
+        if !self.tags.is_empty() {
             f.write_char('@')?;
 
             for (i, (k, v)) in self.tags.iter().enumerate() {
@@ -176,7 +172,7 @@ impl fmt::Display for Message {
                 }
 
                 f.write_str(k)?;
-                if v.len() > 0 {
+                if !v.is_empty() {
                     f.write_char('=')?;
                 }
 
