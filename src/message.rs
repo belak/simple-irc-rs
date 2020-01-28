@@ -21,13 +21,11 @@ fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Par
     let mut tags = BTreeMap::new();
 
     for tag_data in input.split(';') {
-        let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find('=') {
-            (&tag_data[..loc], tag_data.get(loc + 1..).unwrap_or(""))
-        } else {
-            // If there's no equals sign, we need to default to the empty
-            // string/
-            (tag_data, "")
-        };
+        let mut pieces = tag_data.splitn(2, '=');
+        let tag_name = pieces
+            .next()
+            .ok_or_else(|| ParseError::TagError("missing tag name".to_string()))?;
+        let raw_tag_value = pieces.next().unwrap_or("");
 
         // If the value doesn't contain any escaped characters, we can return
         // the string as-is.
@@ -59,7 +57,8 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
 
     fn try_from(input: &'a str) -> Result<Self, Self::Error> {
         // We want a mutable input so we can jump through it as we parse the
-        // message.
+        // message. Note that this shadows the input param on purpose so it
+        // cannot accidentally be used later.
         let mut input = input;
 
         // Possibly chop off the ending \r\n where either of those characters is
@@ -86,6 +85,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                 return Err(ParseError::TagError("failed to parse tag data".to_string()));
             }
 
+            // Trim up to the next valid character.
             input = input.trim_start_matches(' ');
         }
 
@@ -101,6 +101,9 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                     "failed to parse prefix data".to_string(),
                 ));
             }
+
+            // Note that we don't trim spaces here because that's handled by
+            // param parsing.
         }
 
         // Parse out the params
@@ -144,7 +147,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         }
 
         if params.is_empty() {
-            return Err(ParseError::CommandError("command not found".to_string()));
+            return Err(ParseError::CommandError("command missing".to_string()));
         }
 
         // Take the first param as the command. Note that we've already checked
@@ -173,9 +176,11 @@ impl<'a> fmt::Display for Message<'a> {
                 }
 
                 f.write_str(k)?;
-                if !v.is_empty() {
-                    f.write_char('=')?;
+                if v.is_empty() {
+                    continue;
                 }
+
+                f.write_char('=')?;
 
                 for c in v.chars() {
                     match escape_char(c) {
