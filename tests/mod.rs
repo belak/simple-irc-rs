@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
@@ -61,8 +62,6 @@ fn test_msg_split() {
         let mut test_tags = test.atoms.tags.clone();
         let mut msg_tags = msg.tags.clone();
 
-        println!("{:?} {:?}", test_tags, msg_tags);
-
         // Loop through all the test tags and make sure they were there.
         for (key, value) in test_tags.clone() {
             assert_eq!(
@@ -113,10 +112,10 @@ fn test_msg_join() {
     let tests = serde_yaml::from_str::<MsgJoinTests>(msg_split_test_data).unwrap();
 
     for test in tests.tests {
-        let mut tags: BTreeMap<&str, String> = BTreeMap::new();
+        let mut tags = BTreeMap::new();
 
         for (k, v) in test.atoms.tags.iter() {
-            tags.insert(k.as_str(), v.to_string());
+            tags.insert(k.as_str(), Cow::Owned(v.to_string()));
         }
 
         let msg = Message {

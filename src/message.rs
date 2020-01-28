@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
@@ -6,15 +7,20 @@ use std::option::Option;
 
 use super::error::ParseError;
 
+use crate::escaped::{escape_char, unescape_char};
+
 #[derive(Debug, PartialEq, Default)]
 pub struct Message<'a> {
-    pub tags: BTreeMap<&'a str, String>,
+    pub tags: BTreeMap<&'a str, Cow<'a, str>>,
     pub prefix: Option<&'a str>,
     pub command: &'a str,
     pub params: Vec<&'a str>,
 }
 
-fn parse_tags<'a>(tags: &mut BTreeMap<&'a str, String>, input: &'a str) -> Result<(), ParseError> {
+fn parse_tags<'a>(
+    tags: &mut BTreeMap<&'a str, Cow<'a, str>>,
+    input: &'a str,
+) -> Result<(), ParseError> {
     for tag_data in input.split(";") {
         let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find("=") {
             (&tag_data[..loc], tag_data.get(loc + 1..).unwrap_or(""))
@@ -24,21 +30,19 @@ fn parse_tags<'a>(tags: &mut BTreeMap<&'a str, String>, input: &'a str) -> Resul
             (tag_data, "")
         };
 
+        // If the value doesn't contain any escaped characters, we can return
+        // the string as-is.
+        if !raw_tag_value.contains('\\') {
+            tags.insert(tag_name, Cow::Borrowed(raw_tag_value));
+            continue;
+        }
+
         let mut tag_value = String::new();
         let mut tag_value_chars = raw_tag_value.chars();
         while let Some(c) = tag_value_chars.next() {
             if c == '\\' {
                 match tag_value_chars.next() {
-                    Some(escaped_char) => tag_value.push(match escaped_char {
-                        ':' => ';',
-                        's' => ' ',
-                        '\\' => '\\',
-                        'r' => '\r',
-                        'n' => '\n',
-
-                        // Fallback should just drop the escaping.
-                        _ => escaped_char,
-                    }),
+                    Some(escaped_char) => tag_value.push(unescape_char(escaped_char)),
 
                     // None at this point means we're at the end of the value,
                     // so we can drop it.
@@ -49,7 +53,7 @@ fn parse_tags<'a>(tags: &mut BTreeMap<&'a str, String>, input: &'a str) -> Resul
             }
         }
 
-        tags.insert(tag_name, tag_value);
+        tags.insert(tag_name, Cow::Owned(tag_value));
     }
 
     Ok(())
@@ -72,8 +76,8 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             input = &input[..input.len() - 1];
         }
 
-        let mut tags: BTreeMap<&'a str, String> = BTreeMap::new();
-        let mut prefix: Option<&'a str> = None;
+        let mut tags = BTreeMap::new();
+        let mut prefix = None;
 
         if input.get(..1) == Some("@") {
             // Find the first space so we can split on it.
@@ -164,8 +168,11 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
 impl<'a> fmt::Display for Message<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.tags.len() > 0 {
-            f.write_str("@")?;
+            f.write_char('@')?;
+
             for (i, (k, v)) in self.tags.iter().enumerate() {
+                // We need to insert a separator for everything other than the
+                // first value.
                 if i != 0 {
                     f.write_char(';')?;
                 }
@@ -176,33 +183,32 @@ impl<'a> fmt::Display for Message<'a> {
                 }
 
                 for c in v.chars() {
-                    // Escape characters that can't be directly encoded.
-                    match c {
-                        ';' => f.write_str(r"\:")?,
-                        ' ' => f.write_str(r"\s")?,
-                        '\\' => f.write_str(r"\\")?,
-                        '\r' => f.write_str(r"\r")?,
-                        '\n' => f.write_str(r"\n")?,
-                        _ => f.write_char(c)?,
+                    match escape_char(c) {
+                        Some(escaped_str) => f.write_str(escaped_str)?,
+                        None => f.write_char(c)?,
                     }
                 }
             }
 
-            f.write_str(" ")?;
+            f.write_char(' ')?;
         }
 
         if let Some(prefix) = &self.prefix {
-            write!(f, ":{} ", prefix)?;
+            f.write_str(":")?;
+            f.write_str(prefix)?;
+            f.write_char(' ')?;
         }
 
         f.write_str(self.command)?;
 
         if let Some((last, params)) = self.params.split_last() {
             for param in params {
-                write!(f, " {}", param)?;
+                f.write_char(' ')?;
+                f.write_str(param)?;
             }
 
-            write!(f, " :{}", last)?;
+            f.write_str(" :")?;
+            f.write_str(last)?;
         }
 
         Ok(())
