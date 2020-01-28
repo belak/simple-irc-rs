@@ -1,10 +1,9 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
 use simple_irc::Message;
+use simple_irc::ParseError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct TestAtoms {
@@ -47,7 +46,7 @@ fn test_msg_split() {
     for test in tests.tests {
         println!("Trying {}", &test.input);
 
-        let res = Message::try_from(&test.input[..]);
+        let res: Result<Message, ParseError> = test.input.parse();
 
         // Ensure all messages parse into something
         assert!(
@@ -79,22 +78,16 @@ fn test_msg_split() {
             assert!(false, "Extra value {} for key {}", value, key);
         }
 
-        let prefix = if let Some(p) = &test.atoms.source {
-            Some(p.as_str())
-        } else {
-            None
-        };
-
         assert_eq!(
-            prefix, msg.prefix,
+            test.atoms.source, msg.prefix,
             "msg prefix mismatch: expected \"{:?}\" got \"{:?}\"",
-            prefix, msg.prefix,
+            test.atoms.source, msg.prefix,
         );
 
         assert_eq!(
-            &test.atoms.verb, msg.command,
+            test.atoms.verb, msg.command,
             "msg command mismatch: expected \"{}\" got \"{}\"",
-            &test.atoms.verb, msg.command,
+            test.atoms.verb, msg.command,
         );
 
         let params: Vec<&str> = test.atoms.params.iter().map(|s| &s[..]).collect();
@@ -115,14 +108,14 @@ fn test_msg_join() {
         let mut tags = BTreeMap::new();
 
         for (k, v) in test.atoms.tags.iter() {
-            tags.insert(k.as_str(), Cow::Owned(v.to_string()));
+            tags.insert(k.to_string(), v.to_string());
         }
 
         let msg = Message {
             tags,
-            prefix: test.atoms.source.as_deref(),
-            command: &test.atoms.verb[..],
-            params: test.atoms.params.iter().map(|s| &s[..]).collect(),
+            prefix: test.atoms.source,
+            command: test.atoms.verb,
+            params: test.atoms.params,
         };
 
         let out = format!("{}", msg);

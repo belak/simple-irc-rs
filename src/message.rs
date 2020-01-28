@@ -1,26 +1,24 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Write;
 use std::option::Option;
+use std::str::FromStr;
 
 use super::error::ParseError;
 
 use crate::escaped::{escape_char, unescape_char};
 
 #[derive(Debug, PartialEq, Default)]
-pub struct Message<'a> {
-    pub tags: BTreeMap<&'a str, Cow<'a, str>>,
-    pub prefix: Option<&'a str>,
-    pub command: &'a str,
-    pub params: Vec<&'a str>,
+pub struct Message {
+    pub tags: BTreeMap<String, String>,
+    pub prefix: Option<String>,
+    pub command: String,
+    pub params: Vec<String>,
 }
 
-fn parse_tags<'a>(
-    tags: &mut BTreeMap<&'a str, Cow<'a, str>>,
-    input: &'a str,
-) -> Result<(), ParseError> {
+fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
+    let mut tags = BTreeMap::new();
+
     for tag_data in input.split(";") {
         let (tag_name, raw_tag_value) = if let Some(loc) = tag_data.find("=") {
             (&tag_data[..loc], tag_data.get(loc + 1..).unwrap_or(""))
@@ -33,7 +31,7 @@ fn parse_tags<'a>(
         // If the value doesn't contain any escaped characters, we can return
         // the string as-is.
         if !raw_tag_value.contains('\\') {
-            tags.insert(tag_name, Cow::Borrowed(raw_tag_value));
+            tags.insert(tag_name.to_string(), raw_tag_value.to_string());
             continue;
         }
 
@@ -53,16 +51,16 @@ fn parse_tags<'a>(
             }
         }
 
-        tags.insert(tag_name, Cow::Owned(tag_value));
+        tags.insert(tag_name.to_string(), tag_value);
     }
 
-    Ok(())
+    Ok(tags)
 }
 
-impl<'a> TryFrom<&'a str> for Message<'a> {
-    type Error = ParseError;
+impl FromStr for Message {
+    type Err = ParseError;
 
-    fn try_from(input: &'a str) -> Result<Self, Self::Error> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         // We want a mutable input so we can jump through it as we parse the
         // message.
         let mut input = input;
@@ -83,7 +81,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             // Find the first space so we can split on it.
             if let Some(loc) = input.find(" ") {
                 let tag_data = &input[1..loc];
-                parse_tags(&mut tags, tag_data)?;
+                tags = parse_tags(tag_data)?;
 
                 // Update input to point to everything after the space
                 input = &input[loc..];
@@ -97,7 +95,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         if input.get(..1) == Some(":") {
             // Find the first space so we can split on it.
             if let Some(loc) = input.find(" ") {
-                prefix = Some(&input[1..loc]);
+                prefix = Some(input[1..loc].to_string());
 
                 // Update input to point to everything after the space
                 input = &input[loc..];
@@ -118,7 +116,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                 // If a param started with a :, that means the rest of the input
                 // is a single trailing param.
                 Some(":") => {
-                    params.push(&input[1..]);
+                    params.push(input[1..].to_string());
                     break;
                 }
 
@@ -126,7 +124,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                 Some(_) => {
                     match input.find(" ") {
                         Some(loc) => {
-                            params.push(&input[..loc]);
+                            params.push(input[..loc].to_string());
                             // Update input to point to everything after the space
                             input = &input[loc..];
                         }
@@ -134,7 +132,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                         // If we couldn't find a space, the rest of the string
                         // is the param.
                         None => {
-                            params.push(input);
+                            params.push(input.to_string());
                             break;
                         }
                     }
@@ -159,13 +157,13 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         Ok(Message {
             tags,
             prefix,
-            command: *command,
+            command: command.to_string(),
             params: params.to_vec(),
         })
     }
 }
 
-impl<'a> fmt::Display for Message<'a> {
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.tags.len() > 0 {
             f.write_char('@')?;
@@ -199,7 +197,7 @@ impl<'a> fmt::Display for Message<'a> {
             f.write_char(' ')?;
         }
 
-        f.write_str(self.command)?;
+        f.write_str(&self.command)?;
 
         if let Some((last, params)) = self.params.split_last() {
             for param in params {
