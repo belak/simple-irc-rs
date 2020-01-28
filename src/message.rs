@@ -5,7 +5,7 @@ use std::fmt;
 use std::fmt::Write;
 use std::option::Option;
 
-use super::error::ParseError;
+use super::error::Error;
 
 use crate::escaped::{escape_char, unescape_char};
 
@@ -17,14 +17,14 @@ pub struct Message<'a> {
     pub params: Vec<&'a str>,
 }
 
-fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, ParseError> {
+fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Error> {
     let mut tags = BTreeMap::new();
 
     for tag_data in input.split(';') {
         let mut pieces = tag_data.splitn(2, '=');
         let tag_name = pieces
             .next()
-            .ok_or_else(|| ParseError::TagError("missing tag name".to_string()))?;
+            .ok_or_else(|| Error::TagError("missing tag name".to_string()))?;
         let raw_tag_value = pieces.next().unwrap_or("");
 
         // If the value doesn't contain any escaped characters, we can return
@@ -53,7 +53,7 @@ fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Par
 }
 
 impl<'a> TryFrom<&'a str> for Message<'a> {
-    type Error = ParseError;
+    type Error = Error;
 
     fn try_from(input: &'a str) -> Result<Self, Self::Error> {
         // We want a mutable input so we can jump through it as we parse the
@@ -82,7 +82,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                 // Update input to point to everything after the space
                 input = &input[loc..];
             } else {
-                return Err(ParseError::TagError("failed to parse tag data".to_string()));
+                return Err(Error::TagError("failed to parse tag data".to_string()));
             }
 
             // Trim up to the next valid character.
@@ -97,7 +97,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
                 // Update input to point to everything after the space
                 input = &input[loc..];
             } else {
-                return Err(ParseError::PrefixError(
+                return Err(Error::PrefixError(
                     "failed to parse prefix data".to_string(),
                 ));
             }
@@ -147,7 +147,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         }
 
         if params.is_empty() {
-            return Err(ParseError::CommandError("command missing".to_string()));
+            return Err(Error::CommandError("missing command".to_string()));
         }
 
         // Take the first param as the command. Note that we've already checked

@@ -1,7 +1,7 @@
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
-pub enum ParseError {
+pub enum Error {
     #[error("error parsing tags: {0}")]
     TagError(String),
 

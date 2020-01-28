@@ -2,5 +2,5 @@ mod error;
 mod escaped;
 mod message;
 
-pub use error::ParseError;
+pub use error::Error;
 pub use message::Message;
