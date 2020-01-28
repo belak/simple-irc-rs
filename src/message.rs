@@ -189,7 +189,7 @@ impl<'a> fmt::Display for Message<'a> {
         }
 
         if let Some(prefix) = &self.prefix {
-            f.write_str(":")?;
+            f.write_char(':')?;
             f.write_str(prefix)?;
             f.write_char(' ')?;
         }

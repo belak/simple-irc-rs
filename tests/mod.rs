@@ -59,23 +59,24 @@ fn test_msg_split() {
 
         let msg = res.unwrap();
 
-        let mut test_tags = test.atoms.tags.clone();
         let mut msg_tags = msg.tags.clone();
 
         // Loop through all the test tags and make sure they were there.
-        for (key, value) in test_tags.clone() {
+        for (key, value) in test.atoms.tags {
             assert_eq!(
-                &value,
-                msg_tags.get(key.as_str()).unwrap(),
+                value,
+                msg_tags.remove(key.as_str()).unwrap(),
                 "Mismatched value for key {}",
                 key.as_str()
             );
-            test_tags.remove(&key);
-            msg_tags.remove(&key[..]);
+
+            // Remove any keys we found from msg_tags so we can ensure there
+            // were no leftovers later.
+            msg_tags.remove(key.as_str());
         }
 
         // If there are any tags left over in msg_tags, this is an error.
-        for (key, value) in msg_tags.clone() {
+        for (key, value) in msg_tags {
             assert!(false, "Extra value {} for key {}", value, key);
         }
 
@@ -93,7 +94,7 @@ fn test_msg_split() {
             test.atoms.verb, msg.command,
         );
 
-        let params: Vec<&str> = test.atoms.params.iter().map(|s| &s[..]).collect();
+        let params: Vec<&str> = test.atoms.params.iter().map(|s| s.as_str()).collect();
         assert_eq!(
             params, msg.params,
             "msg params mismatch: expected \"{:?}\" got \"{:?}\"",
