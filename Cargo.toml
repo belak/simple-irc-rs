@@ -3,6 +3,10 @@ name = "simple-irc"
 version = "0.1.0"
 authors = ["Kaleb Elwert <belak@coded.io>"]
 edition = "2018"
+description = "a simple, no nonsense, IRC parsing crate"
+license = "MIT"
+documentation = "https://docs.rs/simple-irc"
+repository = "https://github.com/belak/simple-irc-rs"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
