@@ -1,22 +1,23 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Write;
 use std::option::Option;
-use std::str::FromStr;
 
 use super::error::ParseError;
 
 use crate::escaped::{escape_char, unescape_char};
 
 #[derive(Debug, PartialEq, Default)]
-pub struct Message {
-    pub tags: BTreeMap<String, String>,
-    pub prefix: Option<String>,
-    pub command: String,
-    pub params: Vec<String>,
+pub struct Message<'a> {
+    pub tags: BTreeMap<&'a str, Cow<'a, str>>,
+    pub prefix: Option<&'a str>,
+    pub command: &'a str,
+    pub params: Vec<&'a str>,
 }
 
-fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
+fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, ParseError> {
     let mut tags = BTreeMap::new();
 
     for tag_data in input.split(';') {
@@ -31,7 +32,7 @@ fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
         // If the value doesn't contain any escaped characters, we can return
         // the string as-is.
         if !raw_tag_value.contains('\\') {
-            tags.insert(tag_name.to_string(), raw_tag_value.to_string());
+            tags.insert(tag_name, Cow::Borrowed(raw_tag_value));
             continue;
         }
 
@@ -47,16 +48,16 @@ fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, ParseError> {
             }
         }
 
-        tags.insert(tag_name.to_string(), tag_value);
+        tags.insert(tag_name, Cow::Owned(tag_value));
     }
 
     Ok(tags)
 }
 
-impl FromStr for Message {
-    type Err = ParseError;
+impl<'a> TryFrom<&'a str> for Message<'a> {
+    type Error = ParseError;
 
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
+    fn try_from(input: &'a str) -> Result<Self, Self::Error> {
         // We want a mutable input so we can jump through it as we parse the
         // message.
         let mut input = input;
@@ -91,7 +92,7 @@ impl FromStr for Message {
         if input.get(..1) == Some(":") {
             // Find the first space so we can split on it.
             if let Some(loc) = input.find(' ') {
-                prefix = Some(input[1..loc].to_string());
+                prefix = Some(&input[1..loc]);
 
                 // Update input to point to everything after the space
                 input = &input[loc..];
@@ -112,7 +113,7 @@ impl FromStr for Message {
                 // If a param started with a :, that means the rest of the input
                 // is a single trailing param.
                 Some(":") => {
-                    params.push(input[1..].to_string());
+                    params.push(&input[1..]);
                     break;
                 }
 
@@ -120,7 +121,7 @@ impl FromStr for Message {
                 Some(_) => {
                     match input.find(' ') {
                         Some(loc) => {
-                            params.push(input[..loc].to_string());
+                            params.push(&input[..loc]);
                             // Update input to point to everything after the space
                             input = &input[loc..];
                         }
@@ -128,7 +129,7 @@ impl FromStr for Message {
                         // If we couldn't find a space, the rest of the string
                         // is the param.
                         None => {
-                            params.push(input.to_string());
+                            params.push(input);
                             break;
                         }
                     }
@@ -153,13 +154,13 @@ impl FromStr for Message {
         Ok(Message {
             tags,
             prefix,
-            command: command.to_string(),
+            command,
             params: params.to_vec(),
         })
     }
 }
 
-impl fmt::Display for Message {
+impl<'a> fmt::Display for Message<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.tags.is_empty() {
             f.write_char('@')?;

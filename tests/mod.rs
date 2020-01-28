@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
 use simple_irc::Message;
-use simple_irc::ParseError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct TestAtoms {
@@ -46,7 +47,7 @@ fn test_msg_split() {
     for test in tests.tests {
         println!("Trying {}", &test.input);
 
-        let res: Result<Message, ParseError> = test.input.parse();
+        let res = Message::try_from(&test.input[..]);
 
         // Ensure all messages parse into something
         assert!(
@@ -78,10 +79,12 @@ fn test_msg_split() {
             assert!(false, "Extra value {} for key {}", value, key);
         }
 
+        let prefix = test.atoms.source.as_deref();
+
         assert_eq!(
-            test.atoms.source, msg.prefix,
+            prefix, msg.prefix,
             "msg prefix mismatch: expected \"{:?}\" got \"{:?}\"",
-            test.atoms.source, msg.prefix,
+            prefix, msg.prefix,
         );
 
         assert_eq!(
@@ -108,14 +111,14 @@ fn test_msg_join() {
         let mut tags = BTreeMap::new();
 
         for (k, v) in test.atoms.tags.iter() {
-            tags.insert(k.to_string(), v.to_string());
+            tags.insert(k.as_str(), Cow::Borrowed(v.as_str()));
         }
 
         let msg = Message {
             tags,
-            prefix: test.atoms.source,
-            command: test.atoms.verb,
-            params: test.atoms.params,
+            prefix: test.atoms.source.as_deref(),
+            command: test.atoms.verb.as_str(),
+            params: test.atoms.params.iter().map(|s| s.as_str()).collect(),
         };
 
         let out = format!("{}", msg);
