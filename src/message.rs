@@ -19,19 +19,19 @@ pub struct Message<'a> {
 }
 
 impl<'a> Message<'a> {
-    pub fn to_owned(self) -> Message<'static> {
+    pub fn to_owned(&self) -> Message<'static> {
         Message {
             tags: BTreeMap::from_iter(
                 self.tags
-                    .into_iter()
-                    .map(|(k, v)| (Cow::Owned(k.into_owned()), Cow::Owned(v.into_owned()))),
+                    .iter()
+                    .map(|(k, v)| (Cow::Owned(k.to_string()), Cow::Owned(v.to_string()))),
             ),
-            prefix: self.prefix.map(|s| Cow::Owned(s.into_owned())),
-            command: Cow::Owned(self.command.into_owned()),
+            prefix: self.prefix.as_ref().map(|s| Cow::Owned(s.to_string())),
+            command: Cow::Owned(self.command.to_string()),
             params: self
                 .params
-                .into_iter()
-                .map(|s| Cow::Owned(s.into_owned()))
+                .iter()
+                .map(|s| Cow::Owned(s.to_string()))
                 .collect(),
         }
     }
