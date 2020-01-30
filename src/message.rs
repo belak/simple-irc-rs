@@ -19,6 +19,23 @@ pub struct Message<'a> {
 }
 
 impl<'a> Message<'a> {
+    pub fn into_owned(self) -> Message<'static> {
+        Message {
+            tags: BTreeMap::from_iter(
+                self.tags
+                    .into_iter()
+                    .map(|(k, v)| (Cow::Owned(k.into_owned()), Cow::Owned(v.into_owned()))),
+            ),
+            prefix: self.prefix.map(|s| Cow::Owned(s.into_owned())),
+            command: Cow::Owned(self.command.to_string()),
+            params: self
+                .params
+                .into_iter()
+                .map(|s| Cow::Owned(s.into_owned()))
+                .collect(),
+        }
+    }
+
     pub fn to_owned(&self) -> Message<'static> {
         Message {
             tags: BTreeMap::from_iter(
