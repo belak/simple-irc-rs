@@ -80,7 +80,7 @@ fn test_msg_split() {
             assert!(false, "Extra value {} for key {}", value, key);
         }
 
-        let prefix = test.atoms.source.as_deref();
+        let prefix = test.atoms.source.as_deref().map(Cow::Borrowed);
 
         assert_eq!(
             prefix, msg.prefix,
@@ -112,14 +112,19 @@ fn test_msg_join() {
         let mut tags = BTreeMap::new();
 
         for (k, v) in test.atoms.tags.iter() {
-            tags.insert(k.as_str(), Cow::Borrowed(v.as_str()));
+            tags.insert(Cow::Borrowed(k.as_str()), Cow::Borrowed(v.as_str()));
         }
 
         let msg = Message {
             tags,
-            prefix: test.atoms.source.as_deref(),
-            command: test.atoms.verb.as_str(),
-            params: test.atoms.params.iter().map(|s| s.as_str()).collect(),
+            prefix: test.atoms.source.as_deref().map(Cow::Borrowed),
+            command: Cow::Borrowed(test.atoms.verb.as_str()),
+            params: test
+                .atoms
+                .params
+                .iter()
+                .map(|s| Cow::Borrowed(s.as_str()))
+                .collect(),
         };
 
         let out = format!("{}", msg);

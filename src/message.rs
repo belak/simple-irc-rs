@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Write;
+use std::iter::FromIterator;
 use std::option::Option;
 
 use super::error::Error;
@@ -11,20 +12,41 @@ use crate::escaped::{escape_char, unescape_char};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct Message<'a> {
-    pub tags: BTreeMap<&'a str, Cow<'a, str>>,
-    pub prefix: Option<&'a str>,
-    pub command: &'a str,
-    pub params: Vec<&'a str>,
+    pub tags: BTreeMap<Cow<'a, str>, Cow<'a, str>>,
+    pub prefix: Option<Cow<'a, str>>,
+    pub command: Cow<'a, str>,
+    pub params: Vec<Cow<'a, str>>,
 }
 
-fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Error> {
+impl<'a> Message<'a> {
+    pub fn to_owned(self) -> Message<'static> {
+        Message {
+            tags: BTreeMap::from_iter(
+                self.tags
+                    .into_iter()
+                    .map(|(k, v)| (Cow::Owned(k.into_owned()), Cow::Owned(v.into_owned()))),
+            ),
+            prefix: self.prefix.map(|s| Cow::Owned(s.into_owned())),
+            command: Cow::Owned(self.command.into_owned()),
+            params: self
+                .params
+                .into_iter()
+                .map(|s| Cow::Owned(s.into_owned()))
+                .collect(),
+        }
+    }
+}
+
+fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<Cow<'a, str>, Cow<'a, str>>, Error> {
     let mut tags = BTreeMap::new();
 
     for tag_data in input.split(';') {
         let mut pieces = tag_data.splitn(2, '=');
-        let tag_name = pieces
-            .next()
-            .ok_or_else(|| Error::TagError("missing tag name".to_string()))?;
+        let tag_name = Cow::Borrowed(
+            pieces
+                .next()
+                .ok_or_else(|| Error::TagError("missing tag name".to_string()))?,
+        );
         let raw_tag_value = pieces.next().unwrap_or("");
 
         // If the value doesn't contain any escaped characters, we can return
@@ -87,20 +109,20 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
 
         if input.starts_with(':') {
             let mut parts = (&input[1..]).splitn(2, ' ');
-            prefix = Some(
-                parts
-                    .next()
-                    .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?,
-            );
+            prefix = Some(Cow::Borrowed(parts.next().ok_or_else(|| {
+                Error::TagError("failed to parse tag data".to_string())
+            })?));
 
             // Either advance to the next token, or return an empty string.
             input = parts.next().unwrap_or("").trim_start_matches(' ');
         }
 
         let mut parts = input.splitn(2, ' ');
-        let command = parts
-            .next()
-            .ok_or_else(|| Error::CommandError("missing command".to_string()))?;
+        let command = Cow::Borrowed(
+            parts
+                .next()
+                .ok_or_else(|| Error::CommandError("missing command".to_string()))?,
+        );
 
         // Either advance to the next token, or return an empty string.
         input = parts.next().unwrap_or("").trim_start_matches(' ');
@@ -111,13 +133,13 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             // Special case - if the param starts with a :, it's a trailing
             // param, so we need to include the rest of the input as the param.
             if input.starts_with(':') {
-                params.push(&input[1..]);
+                params.push(Cow::Borrowed(&input[1..]));
                 break;
             }
 
             let mut parts = input.splitn(2, ' ');
             if let Some(param) = parts.next() {
-                params.push(param)
+                params.push(Cow::Borrowed(param))
             }
 
             // Either advance to the next token, or return an empty string.
