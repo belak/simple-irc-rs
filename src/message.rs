@@ -1,23 +1,22 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Write;
 use std::option::Option;
+use std::str::FromStr;
 
 use super::error::Error;
 
 use crate::escaped::{escape_char, unescape_char};
 
 #[derive(Debug, PartialEq, Default)]
-pub struct Message<'a> {
-    pub tags: BTreeMap<&'a str, Cow<'a, str>>,
-    pub prefix: Option<&'a str>,
-    pub command: &'a str,
-    pub params: Vec<&'a str>,
+pub struct Message {
+    pub tags: BTreeMap<String, String>,
+    pub prefix: Option<String>,
+    pub command: String,
+    pub params: Vec<String>,
 }
 
-fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Error> {
+fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, Error> {
     let mut tags = BTreeMap::new();
 
     for tag_data in input.split(';') {
@@ -26,13 +25,6 @@ fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Err
             .next()
             .ok_or_else(|| Error::TagError("missing tag name".to_string()))?;
         let raw_tag_value = pieces.next().unwrap_or("");
-
-        // If the value doesn't contain any escaped characters, we can return
-        // the string as-is.
-        if !raw_tag_value.contains('\\') {
-            tags.insert(tag_name, Cow::Borrowed(raw_tag_value));
-            continue;
-        }
 
         let mut tag_value = String::new();
         let mut tag_value_chars = raw_tag_value.chars();
@@ -46,16 +38,16 @@ fn parse_tags<'a>(input: &'a str) -> Result<BTreeMap<&'a str, Cow<'a, str>>, Err
             }
         }
 
-        tags.insert(tag_name, Cow::Owned(tag_value));
+        tags.insert(tag_name.to_string(), tag_value);
     }
 
     Ok(tags)
 }
 
-impl<'a> TryFrom<&'a str> for Message<'a> {
-    type Error = Error;
+impl FromStr for Message {
+    type Err = Error;
 
-    fn try_from(input: &'a str) -> Result<Self, Self::Error> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         // We want a mutable input so we can jump through it as we parse the
         // message. Note that this shadows the input param on purpose so it
         // cannot accidentally be used later.
@@ -90,7 +82,8 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             prefix = Some(
                 parts
                     .next()
-                    .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?,
+                    .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?
+                    .to_string(),
             );
 
             // Either advance to the next token, or return an empty string.
@@ -100,7 +93,8 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
         let mut parts = input.splitn(2, ' ');
         let command = parts
             .next()
-            .ok_or_else(|| Error::CommandError("missing command".to_string()))?;
+            .ok_or_else(|| Error::CommandError("missing command".to_string()))?
+            .to_string();
 
         // Either advance to the next token, or return an empty string.
         input = parts.next().unwrap_or("").trim_start_matches(' ');
@@ -111,13 +105,13 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
             // Special case - if the param starts with a :, it's a trailing
             // param, so we need to include the rest of the input as the param.
             if input.starts_with(':') {
-                params.push(&input[1..]);
+                params.push(input[1..].to_string());
                 break;
             }
 
             let mut parts = input.splitn(2, ' ');
             if let Some(param) = parts.next() {
-                params.push(param)
+                params.push(param.to_string());
             }
 
             // Either advance to the next token, or return an empty string.
@@ -133,7 +127,7 @@ impl<'a> TryFrom<&'a str> for Message<'a> {
     }
 }
 
-impl<'a> fmt::Display for Message<'a> {
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.tags.is_empty() {
             f.write_char('@')?;

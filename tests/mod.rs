@@ -1,6 +1,4 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +45,7 @@ fn test_msg_split() {
     for test in tests.tests {
         println!("Trying {}", &test.input);
 
-        let res = Message::try_from(&test.input[..]);
+        let res = test.input[..].parse::<Message>();
 
         // Ensure all messages parse into something
         assert!(
@@ -80,12 +78,10 @@ fn test_msg_split() {
             assert!(false, "Extra value {} for key {}", value, key);
         }
 
-        let prefix = test.atoms.source.as_deref();
-
         assert_eq!(
-            prefix, msg.prefix,
+            test.atoms.source, msg.prefix,
             "msg prefix mismatch: expected \"{:?}\" got \"{:?}\"",
-            prefix, msg.prefix,
+            test.atoms.source, msg.prefix,
         );
 
         assert_eq!(
@@ -94,11 +90,10 @@ fn test_msg_split() {
             test.atoms.verb, msg.command,
         );
 
-        let params: Vec<&str> = test.atoms.params.iter().map(|s| s.as_str()).collect();
         assert_eq!(
-            params, msg.params,
+            test.atoms.params, msg.params,
             "msg params mismatch: expected \"{:?}\" got \"{:?}\"",
-            params, msg.params,
+            test.atoms.params, msg.params,
         );
     }
 }
@@ -112,14 +107,14 @@ fn test_msg_join() {
         let mut tags = BTreeMap::new();
 
         for (k, v) in test.atoms.tags.iter() {
-            tags.insert(k.as_str(), Cow::Borrowed(v.as_str()));
+            tags.insert(k.clone(), v.clone());
         }
 
         let msg = Message {
             tags,
-            prefix: test.atoms.source.as_deref(),
-            command: test.atoms.verb.as_str(),
-            params: test.atoms.params.iter().map(|s| s.as_str()).collect(),
+            prefix: test.atoms.source,
+            command: test.atoms.verb,
+            params: test.atoms.params,
         };
 
         let out = format!("{}", msg);
