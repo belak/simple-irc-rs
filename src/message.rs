@@ -16,6 +16,39 @@ pub struct Message {
     pub params: Vec<String>,
 }
 
+impl Message {
+    pub fn new(command: String, params: Vec<String>) -> Self {
+        Message {
+            command,
+            params,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_with_all(
+        tags: BTreeMap<String, String>,
+        prefix: Option<String>,
+        command: String,
+        params: Vec<String>,
+    ) -> Self {
+        Message {
+            tags,
+            prefix,
+            command,
+            params,
+        }
+    }
+
+    pub fn new_with_prefix(command: String, params: Vec<String>, prefix: String) -> Self {
+        Message {
+            prefix: Some(prefix),
+            command,
+            params,
+            ..Default::default()
+        }
+    }
+}
+
 fn parse_tags(input: &str) -> Result<BTreeMap<String, String>, Error> {
     let mut tags = BTreeMap::new();
 
