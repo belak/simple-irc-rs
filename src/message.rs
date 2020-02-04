@@ -34,13 +34,13 @@ impl FromStr for Prefix {
 
     // nickname [ [ "!" user ] "@" host ]
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let mut parts = input.splitn(2, "@");
+        let mut parts = input.splitn(2, '@');
 
         // Split on host first
         let rest = parts.next().unwrap_or("");
         let host = parts.next();
 
-        let mut parts = rest.splitn(2, "!");
+        let mut parts = rest.splitn(2, '!');
         let nick = parts.next().unwrap_or("").to_string();
         let user = parts.next();
 
@@ -48,14 +48,14 @@ impl FromStr for Prefix {
             nick,
             user: user.and_then(|s| {
                 if s == "" {
-                    return None;
+                    None
                 } else {
                     Some(s.to_string())
                 }
             }),
             host: host.and_then(|s| {
                 if s == "" {
-                    return None;
+                    None
                 } else {
                     Some(s.to_string())
                 }
