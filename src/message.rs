@@ -46,20 +46,8 @@ impl FromStr for Prefix {
 
         Ok(Prefix {
             nick,
-            user: user.and_then(|s| {
-                if s == "" {
-                    None
-                } else {
-                    Some(s.to_string())
-                }
-            }),
-            host: host.and_then(|s| {
-                if s == "" {
-                    None
-                } else {
-                    Some(s.to_string())
-                }
-            }),
+            user: user.and_then(|s| if s == "" { None } else { Some(s.to_string()) }),
+            host: host.and_then(|s| if s == "" { None } else { Some(s.to_string()) }),
         })
     }
 }
