@@ -9,9 +9,83 @@ use super::error::Error;
 use crate::escaped::{escape_char, unescape_char};
 
 #[derive(Debug, PartialEq, Default)]
+pub struct Prefix {
+    pub nick: String,
+    pub user: Option<String>,
+    pub host: Option<String>,
+}
+
+impl Prefix {
+    pub fn new(nick: &str) -> Self {
+        Self::new_with_all(nick, None, None)
+    }
+
+    pub fn new_with_all(nick: &str, user: Option<&str>, host: Option<&str>) -> Self {
+        Prefix {
+            nick: nick.to_string(),
+            user: user.map(|s| s.to_string()),
+            host: host.map(|s| s.to_string()),
+        }
+    }
+}
+
+impl FromStr for Prefix {
+    type Err = Error;
+
+    // nickname [ [ "!" user ] "@" host ]
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let mut parts = input.splitn(2, "@");
+
+        // Split on host first
+        let rest = parts.next().unwrap_or("");
+        let host = parts.next();
+
+        let mut parts = rest.splitn(2, "!");
+        let nick = parts.next().unwrap_or("").to_string();
+        let user = parts.next();
+
+        Ok(Prefix {
+            nick,
+            user: user.and_then(|s| {
+                if s == "" {
+                    return None;
+                } else {
+                    Some(s.to_string())
+                }
+            }),
+            host: host.and_then(|s| {
+                if s == "" {
+                    return None;
+                } else {
+                    Some(s.to_string())
+                }
+            }),
+        })
+    }
+}
+
+impl fmt::Display for Prefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.nick)?;
+
+        if let Some(user) = self.user.as_ref() {
+            f.write_char('!')?;
+            f.write_str(&user[..])?;
+        }
+
+        if let Some(host) = self.host.as_ref() {
+            f.write_char('@')?;
+            f.write_str(&host[..])?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Default)]
 pub struct Message {
     pub tags: BTreeMap<String, String>,
-    pub prefix: Option<String>,
+    pub prefix: Option<Prefix>,
     pub command: String,
     pub params: Vec<String>,
 }
@@ -27,7 +101,7 @@ impl Message {
 
     pub fn new_with_all(
         tags: BTreeMap<String, String>,
-        prefix: Option<String>,
+        prefix: Option<Prefix>,
         command: String,
         params: Vec<String>,
     ) -> Self {
@@ -39,7 +113,7 @@ impl Message {
         }
     }
 
-    pub fn new_with_prefix(command: String, params: Vec<String>, prefix: String) -> Self {
+    pub fn new_with_prefix(command: String, params: Vec<String>, prefix: Prefix) -> Self {
         Message {
             prefix: Some(prefix),
             command,
@@ -102,7 +176,7 @@ impl FromStr for Message {
             let mut parts = (&input[1..]).splitn(2, ' ');
             let tag_data = parts
                 .next()
-                .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?;
+                .ok_or_else(|| Error::TagError("missing tag data".to_string()))?;
 
             tags = parse_tags(tag_data)?;
 
@@ -115,8 +189,9 @@ impl FromStr for Message {
             prefix = Some(
                 parts
                     .next()
-                    .ok_or_else(|| Error::TagError("failed to parse tag data".to_string()))?
-                    .to_string(),
+                    .ok_or_else(|| Error::TagError("missing prefix data".to_string()))?
+                    .parse()
+                    .or_else(|_| Err(Error::TagError("failed to parse prefix data".to_string())))?,
             );
 
             // Either advance to the next token, or return an empty string.
@@ -192,7 +267,7 @@ impl fmt::Display for Message {
 
         if let Some(prefix) = &self.prefix {
             f.write_char(':')?;
-            f.write_str(prefix)?;
+            prefix.fmt(f)?;
             f.write_char(' ')?;
         }
 

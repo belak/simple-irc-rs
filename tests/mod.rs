@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use simple_irc::Message;
+use simple_irc::{Message, Prefix};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct TestAtoms {
@@ -35,6 +35,24 @@ struct MsgJoinTest {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct MsgJoinTests {
     tests: Vec<MsgJoinTest>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct UserhostAtoms {
+    nick: Option<String>,
+    user: Option<String>,
+    host: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct UserhostSplitTest {
+    source: String,
+    atoms: UserhostAtoms,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct UserhostSplitTests {
+    tests: Vec<UserhostSplitTest>,
 }
 
 #[test]
@@ -79,9 +97,11 @@ fn test_msg_split() {
         }
 
         assert_eq!(
-            test.atoms.source, msg.prefix,
+            test.atoms.source,
+            msg.prefix.as_ref().map(|p| p.to_string()),
             "msg prefix mismatch: expected \"{:?}\" got \"{:?}\"",
-            test.atoms.source, msg.prefix,
+            test.atoms.source,
+            msg.prefix.as_ref().map(|p| p.to_string()),
         );
 
         assert_eq!(
@@ -112,7 +132,7 @@ fn test_msg_join() {
 
         let msg = Message {
             tags,
-            prefix: test.atoms.source,
+            prefix: test.atoms.source.map(|s| s.parse().unwrap()),
             command: test.atoms.verb,
             params: test.atoms.params,
         };
@@ -125,5 +145,34 @@ fn test_msg_join() {
             test.matches,
             out
         );
+    }
+}
+
+#[test]
+fn test_userhost_split() {
+    let userhost_test_data = include_str!("external/parser-tests/tests/userhost-split.yaml");
+    let tests = serde_yaml::from_str::<UserhostSplitTests>(userhost_test_data).unwrap();
+
+    for test in tests.tests {
+        // This doesn't seem to even parse according to the docs, so we skip it.
+        if let "!ag@127.0.0.1" = &test.source[..] {
+            continue;
+        };
+
+        let prefix: Prefix = test.source.parse().unwrap();
+
+        assert_eq!(prefix.nick, test.atoms.nick.unwrap());
+        assert_eq!(prefix.user, test.atoms.user, "{}", test.source);
+        assert_eq!(prefix.host, test.atoms.host);
+
+        // There are some edge cases in here which marshal differently than the
+        // input, so we skip those.
+        match &test.source[..] {
+            "coolguy!@127.0.0.1" => continue,
+            "coolguy!ag@" => continue,
+            _ => {}
+        }
+
+        assert_eq!(prefix.to_string(), test.source);
     }
 }
