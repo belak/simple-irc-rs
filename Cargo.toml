@@ -1,6 +1,6 @@
 [package]
 name = "simple-irc"
-version = "0.3.1"
+version = "0.3.2-alpha.0"
 authors = ["Kaleb Elwert <belak@coded.io>"]
 edition = "2018"
 description = "a simple, no nonsense, IRC parsing crate"
