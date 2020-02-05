@@ -8,7 +8,7 @@ use super::error::Error;
 
 use crate::escaped::{escape_char, unescape_char};
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Prefix {
     pub nick: String,
     pub user: Option<String>,
@@ -70,7 +70,7 @@ impl fmt::Display for Prefix {
     }
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Message {
     pub tags: BTreeMap<String, String>,
     pub prefix: Option<Prefix>,
